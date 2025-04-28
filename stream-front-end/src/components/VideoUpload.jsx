@@ -12,7 +12,8 @@ import {
 } from "flowbite-react";
 import axios from "axios";
 import toast from "react-hot-toast";
-function VideoUpload() {
+
+function VideoUpload({ onUploadComplete }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [meta, setMeta] = useState({
     title: "",
@@ -23,13 +24,21 @@ function VideoUpload() {
   const [message, setMessage] = useState("");
 
   function handleFileChange(event) {
-    console.log(event.target.files[0]);
-    setSelectedFile(event.target.files[0]);
+    const file = event.target.files[0];
+    if (file) {
+      if (!file.type.startsWith('video/')) {
+        toast.error('Please select a video file');
+        return;
+      }
+      if (file.size > 500 * 1024 * 1024) {
+        toast.error('File size should be less than 500MB');
+        return;
+      }
+      setSelectedFile(file);
+    }
   }
 
   function formFieldChange(event) {
-    // console.log(event.target.name);
-    // console.log(event.target.value);
     setMeta({
       ...meta,
       [event.target.name]: event.target.value,
@@ -38,37 +47,31 @@ function VideoUpload() {
 
   function handleForm(formEvent) {
     formEvent.preventDefault();
+    
     if (!selectedFile) {
-      alert("Select File !!");
+      toast.error("Please select a video file!");
       return;
     }
-    //submit the file to server:
+
+    if (!meta.title.trim()) {
+      toast.error("Please enter a video title!");
+      return;
+    }
+
     saveVideoToServer(selectedFile, meta);
   }
 
-  function resetForm() {
-    setMeta({
-      title: "",
-      description: "",
-    });
-    setSelectedFile(null);
-    setUploading(false);
-    // setMessage("");
-  }
-
-  //submit file to server
   async function saveVideoToServer(video, videoMetaData) {
     setUploading(true);
-
-    //api call
+    setProgress(0);
 
     try {
       let formData = new FormData();
-      formData.append("title", videoMetaData.title);
-      formData.append("description", videoMetaData.description);
-      formData.append("file", selectedFile);
+      formData.append("title", videoMetaData.title.trim());
+      formData.append("description", videoMetaData.description.trim());
+      formData.append("file", video);
 
-      let response = await axios.post(
+      const response = await axios.post(
         `http://localhost:8080/api/v1/videos`,
         formData,
         {
@@ -79,128 +82,126 @@ function VideoUpload() {
             const progress = Math.round(
               (progressEvent.loaded * 100) / progressEvent.total
             );
-
-            console.log(progress);
             setProgress(progress);
           },
         }
       );
 
-      console.log(response);
-      setProgress(0);
-
+      setProgress(100);
       setMessage("File uploaded " + response.data.videoId);
-      setUploading(false);
-      toast.success("File uploaded successfully !!");
-      resetForm();
+      toast.success("File uploaded successfully!");
+      
+      setTimeout(() => {
+        resetForm();
+        if (onUploadComplete) {
+          onUploadComplete();
+        }
+      }, 1000);
+
     } catch (error) {
-      console.log(error);
-      setMessage("Error in uplaoding File");
+      console.error(error);
+      const errorMessage = error.response?.data?.message || "Error in uploading file";
+      setMessage(errorMessage);
+      toast.error(errorMessage);
+    } finally {
       setUploading(false);
-      toast.error("File not uploaded !!");
     }
+  }
+
+  function resetForm() {
+    setMeta({
+      title: "",
+      description: "",
+    });
+    setSelectedFile(null);
+    setUploading(false);
   }
 
   return (
     <div className="text-white">
-      <Card className="flex flex-col items-center justify-center">
-        <h1>Upload Videos</h1>
+      <div className="flex flex-col items-center justify-center rounded-2xl shadow-xl p-8 border border-white/20 bg-zinc-900/70 backdrop-blur-lg" style={{boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)'}}>
+        <h1 className="text-lg font-semibold mb-6 text-white/90">Upload Videos</h1>
+        <form
+          noValidate
+          className="flex flex-col space-y-6 w-full max-w-sm"
+          onSubmit={handleForm}
+        >
+          <div>
+            <label htmlFor="title" className="block mb-2 text-sm font-medium text-white/80">
+              Video Title
+            </label>
+            <TextInput
+              id="title"
+              value={meta.title}
+              onChange={formFieldChange}
+              name="title"
+              placeholder="Enter title"
+              className="bg-zinc-900/40 border border-white/20 text-white placeholder:text-zinc-300 focus:ring-2 focus:ring-white/30 rounded-lg backdrop-blur-md"
+            />
+          </div>
 
-        <div>
-          <form
-            noValidate
-            className=" flex flex-col space-y-6"
-            onSubmit={handleForm}
+          <div>
+            <label htmlFor="description" className="block mb-2 text-sm font-medium text-white/80">
+              Video Description
+            </label>
+            <Textarea
+              id="description"
+              value={meta.description}
+              onChange={formFieldChange}
+              name="description"
+              placeholder="Write video description..."
+              rows={4}
+              className="bg-zinc-900/40 border border-white/20 text-white placeholder:text-zinc-300 focus:ring-2 focus:ring-white/30 rounded-lg backdrop-blur-md"
+            />
+          </div>
+
+          <div className="flex items-center space-x-4">
+            <label className="flex flex-col items-center cursor-pointer">
+              <span className="text-xs text-white/60 mb-1">Choose video file</span>
+              <input
+                type="file"
+                name="file"
+                accept="video/*"
+                onChange={handleFileChange}
+                className="file:bg-zinc-900/40 file:text-white file:rounded-lg file:border-none file:px-4 file:py-2 file:cursor-pointer file:shadow-sm file:hover:bg-zinc-900/60 bg-transparent border-none text-white backdrop-blur-md"
+              />
+            </label>
+          </div>
+
+          {uploading && (
+            <Progress
+              color="green"
+              progress={progress}
+              textLabel="Uploading"
+              size={"lg"}
+              labelProgress
+              labelText
+              className="mt-2"
+            />
+          )}
+
+          {message && (
+            <Alert
+              color={"success"}
+              rounded
+              withBorderAccent
+              onDismiss={() => setMessage("")}
+              className="mt-2"
+            >
+              <span className="font-medium">Success alert! </span>
+              {message}
+            </Alert>
+          )}
+
+          <Button
+            type="submit"
+            disabled={uploading}
+            className="bg-white/60 hover:bg-white/80 text-zinc-900 font-semibold rounded-lg px-6 py-2 mt-2 transition-colors border border-white/40 backdrop-blur-md shadow-md"
           >
-            <div>
-              <div className="mb-2 block">
-                <Label htmlFor="file-upload" value="Video Title" />
-              </div>
-              <TextInput
-                value={meta.title}
-                onChange={formFieldChange}
-                name="title"
-                placeholder="Enter title"
-              />
-            </div>
-
-            <div className="max-w-md">
-              <div className="mb-2 block">
-                <Label htmlFor="comment" value="Video Description" />
-              </div>
-              <Textarea
-                value={meta.description}
-                onChange={formFieldChange}
-                name="description"
-                id="comment"
-                placeholder="Write video description..."
-                required
-                rows={4}
-              />
-            </div>
-
-            <div className="flex items-center space-x-5 justify-center">
-              <div className="shrink-0">
-                <img
-                  className="h-16 w-16 object-cover "
-                  src={videoLogo}
-                  alt="Current profile photo"
-                />
-              </div>
-              <label className="block">
-                <span className="sr-only">Choose video file</span>
-                <input
-                  name="file"
-                  onChange={handleFileChange}
-                  type="file"
-                  className="block w-full text-sm text-slate-500
-      file:mr-4 file:py-2 file:px-4
-      file:rounded-full file:border-0s
-      file:text-sm file:font-semibold
-      file:bg-violet-50 file:text-violet-700
-      hover:file:bg-violet-100
-    "
-                />
-              </label>
-            </div>
-
-            <div className="">
-              {uploading && (
-                <Progress
-                  color="green"
-                  progress={progress}
-                  textLabel="Uploading"
-                  size={"lg"}
-                  labelProgress
-                  labelText
-                />
-              )}
-            </div>
-
-            <div className="">
-              {message && (
-                <Alert
-                  color={"success"}
-                  rounded
-                  withBorderAccent
-                  onDismiss={() => {
-                    setMessage("");
-                  }}
-                >
-                  <span className="font-medium">Success alert! </span>
-                  {message}
-                </Alert>
-              )}
-            </div>
-
-            <div className="flex justify-center">
-              <Button disabled={uploading} type="submit">
-                Submit
-              </Button>
-            </div>
-          </form>
-        </div>
-      </Card>
+            Submit
+          </Button>
+        </form>
+      </div>
     </div>
   );
 }

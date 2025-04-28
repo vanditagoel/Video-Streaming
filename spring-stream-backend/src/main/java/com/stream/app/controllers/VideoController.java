@@ -27,42 +27,70 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/videos")
-@CrossOrigin("http://localhost:5173 ")
+@CrossOrigin("http://localhost:5173")  // Removed extra space that was causing CORS issues
 public class VideoController {
-
-
     private VideoService videoService;
 
     public VideoController(VideoService videoService) {
         this.videoService = videoService;
     }
 
-    // video upload
     @PostMapping
-    public ResponseEntity<?> create(@RequestParam("file") MultipartFile file, @RequestParam("title") String title, @RequestParam("description") String description) {
+    public ResponseEntity<?> create(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("title") String title,
+            @RequestParam("description") String description) {
+        try {
+            System.out.println("[UPLOAD-STEP-1] Received upload request");
 
-        Video video = new Video();
-        video.setTitle(title);
-        video.setDescription(description);
-        video.setVideoId(UUID.randomUUID().toString());
+            Video video = new Video();
+            video.setTitle(title);
+            video.setDescription(description);
+            video.setVideoId(UUID.randomUUID().toString());
 
-        Video savedVideo = videoService.save(video, file);
+            System.out.println("[UPLOAD-STEP-2] Video object created");
 
-        if (savedVideo != null) {
-            return ResponseEntity.status(HttpStatus.OK).body(video);
-        } else {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(CustomMessage.builder().message("Video not uploaded ").success(false).build());
+            Video savedVideo = null;
+            try {
+                savedVideo = videoService.save(video, file);
+                System.out.println("[UPLOAD-STEP-3] Video saved by service");
+            } catch (Exception e) {
+                System.err.println("[UPLOAD-ERROR] Error in videoService.save: " + e.getMessage());
+                e.printStackTrace();
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body(CustomMessage.builder()
+                                .message("[UPLOAD-ERROR] Error in videoService.save: " + e.getMessage())
+                                .success(false)
+                                .build());
+            }
+
+            if (savedVideo != null) {
+                System.out.println("[UPLOAD-STEP-4] Video saved successfully, returning response");
+                return ResponseEntity.status(HttpStatus.OK).body(savedVideo);
+            } else {
+                System.err.println("[UPLOAD-ERROR] Video not uploaded, savedVideo is null");
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body(CustomMessage.builder()
+                                .message("[UPLOAD-ERROR] Video not uploaded, savedVideo is null")
+                                .success(false)
+                                .build());
+            }
+        } catch (Exception ex) {
+            System.err.println("[UPLOAD-ERROR] Unexpected error: " + ex.getMessage());
+            ex.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(CustomMessage.builder()
+                            .message("[UPLOAD-ERROR] Unexpected error: " + ex.getMessage())
+                            .success(false)
+                            .build());
         }
-
-
     }
 
 
-    //get all videos
-
+    //get all videos with optional search
     @GetMapping
-    public List<Video> getAll() {
-        return videoService.getAll();
+    public List<Video> getAll(@RequestParam(value = "search", required = false) String search) {
+        return videoService.searchVideos(search);
     }
 
 
@@ -89,29 +117,25 @@ public class VideoController {
 
     // stream video in chunks
     @GetMapping("/stream/range/{videoId}")
-    public ResponseEntity<Resource> streamVideoRange(@PathVariable String videoId, @RequestHeader(value = "Range", required = false) String range) {
-        System.out.println(range);
-        //
-
+    public ResponseEntity<Resource> streamVideoRange(
+            @PathVariable String videoId,
+            @RequestHeader(value = "Range", required = false) String range) {
+        
         Video video = videoService.get(videoId);
         Path path = Paths.get(video.getFilePath());
-
         Resource resource = new FileSystemResource(path);
-
         String contentType = video.getContentType();
 
         if (contentType == null) {
             contentType = "application/octet-stream";
-
         }
 
-        //file ki length
         long fileLength = path.toFile().length();
 
-
-        //pahle jaisa hi code hai kyuki range header null
         if (range == null) {
-            return ResponseEntity.ok().contentType(MediaType.parseMediaType(contentType)).body(resource);
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .body(resource);
         }
 
         //calculating start and end range
@@ -178,63 +202,23 @@ public class VideoController {
     }
 
 
-    //serve hls playlist
-
-    //master.m2u8 file
-
-    @Value("${file.video.hsl}")
-    private String HSL_DIR;
-
-    @GetMapping("/{videoId}/master.m3u8")
-    public ResponseEntity<Resource> serverMasterFile(
-            @PathVariable String videoId
-    ) {
-
-//        creating path
-        Path path = Paths.get(HSL_DIR, videoId, "master.m3u8");
-
-        System.out.println(path);
-
+    //Serve .mp4 file directly
+    @GetMapping("/{videoId}/file")
+    public ResponseEntity<Resource> serveVideoFile(@PathVariable String videoId) {
+        Video video = videoService.get(videoId);
+        Path path = Paths.get(video.getFilePath());
         if (!Files.exists(path)) {
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         }
-
         Resource resource = new FileSystemResource(path);
-
         return ResponseEntity
                 .ok()
-                .header(
-                        HttpHeaders.CONTENT_TYPE, "application/vnd.apple.mpegurl"
-                )
+                .header(HttpHeaders.CONTENT_TYPE, "video/mp4")
                 .body(resource);
-
-
     }
 
-    //serve the segments
-
-    @GetMapping("/{videoId}/{segment}.ts")
-    public ResponseEntity<Resource> serveSegments(
-            @PathVariable String videoId,
-            @PathVariable String segment
-    ) {
-
-        // create path for segment
-        Path path = Paths.get(HSL_DIR, videoId, segment + ".ts");
-        if (!Files.exists(path)) {
-            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-        }
-
-        Resource resource = new FileSystemResource(path);
-
-        return ResponseEntity
-                .ok()
-                .header(
-                        HttpHeaders.CONTENT_TYPE, "video/mp2t"
-                )
-                .body(resource);
-
+    @GetMapping("/{videoId}")
+    public Video getById(@PathVariable String videoId) {
+        return videoService.get(videoId);
     }
-
-
 }

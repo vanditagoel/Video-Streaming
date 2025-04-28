@@ -27,5 +27,7 @@ public interface VideoService {
     //video processing
     String processVideo(String videoId);
 
+    List<Video> searchVideos(String search);
+
 
 }

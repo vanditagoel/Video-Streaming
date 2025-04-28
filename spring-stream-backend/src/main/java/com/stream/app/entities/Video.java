@@ -7,7 +7,7 @@ import jakarta.persistence.Table;
 import lombok.*;
 
 @Entity
-@Table(name = "yt_videos")
+@Table(name = "video_storage")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -26,8 +26,4 @@ public class Video {
     private  String  contentType;
 
     private  String filePath;
-
-//    @ManyToOne
-//    private  Course course;
-
 }
