@@ -262,6 +262,9 @@ function VideoPage() {
   const [error, setError] = useState("");
   const navigate = useNavigate();
   const videoRef = useRef(null);
+  const location = useLocation();
+  // Use optional chaining to avoid crash if state is undefined
+  const watchedTill = location.state && location.state.watchedTill ? location.state.watchedTill : 0;
 
   useEffect(() => {
     setError("");
@@ -283,6 +286,16 @@ function VideoPage() {
         console.error('Video fetch error:', err);
       });
   }, [videoId]);
+
+  useEffect(() => {
+    if (videoRef.current && watchedTill > 0) {
+      const handleLoaded = () => {
+        videoRef.current.currentTime = watchedTill;
+      };
+      videoRef.current.addEventListener('loadedmetadata', handleLoaded);
+      return () => videoRef.current.removeEventListener('loadedmetadata', handleLoaded);
+    }
+  }, [watchedTill, video]);
 
   if (error) return (
     <div className="spline-bg min-h-screen flex items-center justify-center">

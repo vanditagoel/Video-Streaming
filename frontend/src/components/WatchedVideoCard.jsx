@@ -9,6 +9,7 @@ function WatchedVideoCard({ video, watchedTill }) {
   return (
     <Link
       to={`/video/${video.videoId}`}
+      state={{ watchedTill: watchedTill || 0 }}
       className="group flex flex-col items-center min-w-[220px] max-w-[220px] bg-white/60 rounded-2xl shadow-lg hover:shadow-2xl transition-shadow duration-200 border border-gray-200 hover:border-blue-400 cursor-pointer transform transition-transform duration-200 scale-100 group-hover:scale-110"
       style={{ textDecoration: 'none' }}
     >

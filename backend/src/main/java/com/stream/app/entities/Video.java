@@ -4,6 +4,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.*;
 
 @Entity
@@ -26,4 +27,14 @@ public class Video {
     private  String  contentType;
 
     private  String filePath;
+
+    @Transient // Not stored in the database
+    private long watchedTill;
+
+    public long getWatchedTill() {
+        return watchedTill;
+    }
+    public void setWatchedTill(long watchedTill) {
+        this.watchedTill = watchedTill;
+    }
 }

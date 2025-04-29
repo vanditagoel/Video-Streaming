@@ -195,6 +195,14 @@ public class VideoController {
         List<WatchedVideo> watched = watchedVideoService.getWatchedVideosForUser(userId);
         List<String> videoIds = watched.stream().map(WatchedVideo::getVideoId).toList();
         if (videoIds.isEmpty()) return List.of();
-        return videoRepository.findAllByVideoIdIn(videoIds);
+        // Attach watchedTill to each Video object (as a transient field)
+        List<Video> videos = videoRepository.findAllByVideoIdIn(videoIds);
+        for (Video video : videos) {
+            watched.stream()
+                .filter(w -> w.getVideoId().equals(video.getVideoId()))
+                .findFirst()
+                .ifPresent(w -> video.setWatchedTill(w.getWatchedTill()));
+        }
+        return videos;
     }
 }
